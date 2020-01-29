@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">HeartMonitor</string>
+    <string name="name">SampleText</string>
+    <string name="date_label">Date: </string>
+    <string name="time_label">Time: </string>
+    <string name="systolic_label">Systolic: </string>
+    <string name="diastolic_label">Diastolic: </string>
+    <string name="heartrate_label">Heart Rate: </string>
+    <string name="comment_label">Comment: </string>
+    <string name="save_label">Save</string>
+    <string name="cancel_label">Cancel</string>
+    <string name="delete_label">Delete</string>
 </resources>

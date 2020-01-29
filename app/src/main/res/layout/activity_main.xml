@@ -6,11 +6,12 @@
     android:orientation="vertical"
     tools:context=".MainActivity">
 
-    <ExpandableListView
+    <ListView
+        android:id="@+id/list_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:id="@+id/heart_list">
+        android:layout_height="match_parent">
 
-    </ExpandableListView>
+    </ListView>
+
 
 </LinearLayout>

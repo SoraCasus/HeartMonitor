@@ -1,79 +1,190 @@
 package com.cmput301A1.heartmonitor;
 
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
-import android.widget.ExpandableListView;
+import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ListView;
 
+import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.FragmentActivity;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends FragmentActivity implements IAddEditDialogListener {
 
+    private static final String SAVE_FILE_NAME = "heart_monitor.json";
 
-    // http://www.androidhive.info/2013/07/android-expandable-list-view-tutorial/
+    private List<DataEntry> dataEntries;
+    private DataEntryAdapter dataEntryAdapter;
+    private ListView listView;
 
-    private DataEntryListAdapter listAdapter;
-    private ExpandableListView expandableListView;
-    private List<String> listDataHeader;
-    private HashMap<String, List<String>> listDataChild;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        populateListView();
 
-        // Get the list view
-        expandableListView = findViewById(R.id.heart_list);
+        // Retrieve data from intent
+        String editFlag = getIntent().getStringExtra("EDIT_FLAG");
+        String deleteFlag = getIntent().getStringExtra("DELETE_FLAG");
+        if (editFlag != null) {
+            String jsonData = getIntent().getStringExtra("EDIT_DATA");
+            int editedIndex = getIntent().getIntExtra("EDIT_INDEX", -1);
+            loadEditedData(jsonData, editedIndex);
+        } else if (deleteFlag != null) {
+            int indexToDelete = getIntent().getIntExtra("DELETE_INDEX", -1);
 
-        // Prepare data list
-        prepareListData();
+        }
 
-        listAdapter = new DataEntryListAdapter(this, this.listDataHeader, this.listDataChild);
+        listView.setOnItemClickListener((AdapterView<?> parent, View view, int position, long id) -> {
+            // Create the Intent, send data to the new Activity
+            Intent intent = new Intent(this, EditActivity.class);
+            DataEntry entry = dataEntries.get(position);
+            JSONObject obj = null;
+            try {
+                obj = entry.toJSON();
+                obj.put("year", entry.getDate().year);
+                obj.put("month", entry.getDate().month);
+                obj.put("day", entry.getDate().day);
+                obj.put("hour", entry.getDate().hour);
+                obj.put("minute", entry.getDate().minute);
+                obj.put("systolic", entry.getSystolic());
+                obj.put("diastolic", entry.getDiastolic());
+                obj.put("heartRate", entry.getHeartRate());
+                obj.put("comment", entry.getComment());
+                obj.put("index", position);
 
-        // Setting list adapter
-        expandableListView.setAdapter(listAdapter);
+                // TODO(Sora): Store all entries to JSON
+                String serializedData = serializeData();
+
+                if (serializedData != null)
+                    outputToFile(serializedData);
+
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            assert obj != null;
+
+            Log.d("HEART", obj.toString());
+            intent.putExtra("SELECTED", obj.toString());
+            startActivity(intent);
+        });
     }
 
-    private void prepareListData() {
-        listDataHeader = new ArrayList<>();
-        listDataChild = new HashMap<>();
+    private void loadEditedData(String data, int index) {
+        try {
+            DataEntry entry = new DataEntry(new JSONObject(data));
+            
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
 
-        // Adding header data
-        listDataHeader.add("Top 250");
-        listDataHeader.add("Now Showing");
-        listDataHeader.add("Coming Soon..");
 
-        // Adding child data
-        List<String> top250 = new ArrayList<>();
-        top250.add("The Shawshank Redemption");
-        top250.add("The Godfather");
-        top250.add("The Godfather: Part II");
-        top250.add("Pulp Fiction");
-        top250.add("The Good, the Bad and the Ugly");
-        top250.add("The Dark Knight");
-        top250.add("12 Angry Men");
+    /**
+     * Opens a FileOutputStream and stores the list of values to the file
+     *
+     * @param toOutput - The serialized data to be saved
+     */
+    private void outputToFile(String toOutput) {
+        if (toOutput != null) {
+            try (FileOutputStream fos = getApplicationContext().openFileOutput(SAVE_FILE_NAME, Context.MODE_PRIVATE)) {
+                fos.write(toOutput.getBytes());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 
-        List<String> nowShowing = new ArrayList<>();
-        nowShowing.add("The Conjuring");
-        nowShowing.add("Despicable Me 2");
-        nowShowing.add("Turbo");
-        nowShowing.add("Grown Ups 2");
-        nowShowing.add("Red 2");
-        nowShowing.add("The Wolverine");
+    }
 
-        List<String> comingSoon = new ArrayList<>();
-        comingSoon.add("2 Guns");
-        comingSoon.add("The Smurfs 2");
-        comingSoon.add("The Spectacular Now");
-        comingSoon.add("The Canyons");
-        comingSoon.add("Europa Report");
+    private String serializeData() throws JSONException {
+        if (dataEntries.size() == 0) return null;
+        JSONObject obj = new JSONObject();
+        JSONArray arr = new JSONArray();
+        for (int i = 0; i < dataEntries.size(); i++) {
+            DataEntry d = dataEntries.get(i);
+            JSONObject o = new JSONObject();
+            o.put("year", d.getDate().year);
+            o.put("month", d.getDate().month);
+            o.put("day", d.getDate().day);
+            o.put("hour", d.getDate().hour);
+            o.put("minute", d.getDate().minute);
+            o.put("systolic", d.getSystolic());
+            o.put("diastolic", d.getDiastolic());
+            o.put("heartRate", d.getHeartRate());
+            o.put("comment", d.getComment());
+            arr.put(i, o);
+        }
+        obj.put("entries", arr);
 
-        listDataChild.put(listDataHeader.get(0), top250); // Header, Child data
-        listDataChild.put(listDataHeader.get(1), nowShowing);
-        listDataChild.put(listDataHeader.get(2), comingSoon);
+        return obj.toString();
+    }
 
+    private void populateListView() {
+        dataEntries = new ArrayList<>();
+
+        try {
+            FileInputStream fis = getApplicationContext().openFileInput(SAVE_FILE_NAME);
+            InputStreamReader isReader = new InputStreamReader(fis, StandardCharsets.UTF_8);
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(isReader)) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append('\n');
+                }
+            }
+
+            JSONObject saveData = new JSONObject(sb.toString());
+            JSONArray array = saveData.getJSONArray("entries");
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject entry = array.getJSONObject(i);
+                DateTime dt = new DateTime();
+                dt.year = entry.getInt("year");
+                dt.month = entry.getInt("month");
+                dt.day = entry.getInt("day");
+                dt.hour = entry.getInt("hour");
+                dt.minute = entry.getInt("minute");
+
+                int systolic = entry.getInt("systolic");
+                int diastolic = entry.getInt("diastolic");
+                int heartRate = entry.getInt("heartRate");
+                String comment = entry.getString("comment");
+                DataEntry dataEntry = new DataEntry(dt, systolic, diastolic, heartRate, comment);
+                dataEntries.add(dataEntry);
+            }
+        } catch (IOException | JSONException e) {
+            e.printStackTrace();
+        }
+
+
+        listView = findViewById(R.id.list_view);
+        dataEntryAdapter = new DataEntryAdapter(this, dataEntries);
+        listView.setAdapter(dataEntryAdapter);
+    }
+
+    @Override
+    public void onDialogPositiveClick(DialogFragment dialog) {
+
+    }
+
+    @Override
+    public void onDialogNegativeClick(DialogFragment dialog) {
 
     }
 }
