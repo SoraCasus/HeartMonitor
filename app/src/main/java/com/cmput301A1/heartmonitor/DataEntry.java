@@ -49,7 +49,7 @@ public class DataEntry {
      * @return - The Date in String form
      */
     public String getHeader() {
-        return String.format(Locale.CANADA, "%4d-%2d-%2d | %d:%d", date.year, date.month, date.day,
+        return String.format(Locale.CANADA, "%04d-%02d-%02d | %02d:%02d", date.year, date.month, date.day,
                 date.hour, date.minute);
     }
 

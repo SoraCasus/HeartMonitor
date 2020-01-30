@@ -1,6 +1,7 @@
 package com.cmput301A1.heartmonitor;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -60,6 +61,9 @@ public class DataEntryAdapter extends BaseAdapter {
         holder.header.setText(data.getHeader());
         holder.subTitle.setText(data.getSubText());
 
+        if (data.isAbnormal()) {
+            convertView.setBackgroundColor(Color.RED);
+        }
         return convertView;
     }
 

@@ -2,41 +2,40 @@ package com.cmput301A1.heartmonitor;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
 
-import androidx.fragment.app.DialogFragment;
-import androidx.fragment.app.FragmentActivity;
+import androidx.appcompat.app.AppCompatActivity;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
-public class MainActivity extends FragmentActivity implements IAddEditDialogListener {
-
-    private static final String SAVE_FILE_NAME = "heart_monitor.json";
+public class MainActivity extends AppCompatActivity {
 
     private List<DataEntry> dataEntries;
     private DataEntryAdapter dataEntryAdapter;
     private ListView listView;
+
+    private SharedPreferences sharedPrefs;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        sharedPrefs = getSharedPreferences(getString(R.string.preference_key), Context.MODE_PRIVATE);
+
+
         populateListView();
 
         // Retrieve data from intent
@@ -48,6 +47,17 @@ public class MainActivity extends FragmentActivity implements IAddEditDialogList
             loadEditedData(jsonData, editedIndex);
         } else if (deleteFlag != null) {
             int indexToDelete = getIntent().getIntExtra("DELETE_INDEX", -1);
+            if (indexToDelete > -1) {
+                dataEntries.remove(indexToDelete);
+                dataEntryAdapter.notifyDataSetChanged();
+                try {
+                    String serializedData = serializeData();
+                    sharedPrefs.edit().putString("save", serializedData).apply();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+            }
 
         }
 
@@ -58,22 +68,13 @@ public class MainActivity extends FragmentActivity implements IAddEditDialogList
             JSONObject obj = null;
             try {
                 obj = entry.toJSON();
-                obj.put("year", entry.getDate().year);
-                obj.put("month", entry.getDate().month);
-                obj.put("day", entry.getDate().day);
-                obj.put("hour", entry.getDate().hour);
-                obj.put("minute", entry.getDate().minute);
-                obj.put("systolic", entry.getSystolic());
-                obj.put("diastolic", entry.getDiastolic());
-                obj.put("heartRate", entry.getHeartRate());
-                obj.put("comment", entry.getComment());
                 obj.put("index", position);
 
                 // TODO(Sora): Store all entries to JSON
                 String serializedData = serializeData();
 
                 if (serializedData != null)
-                    outputToFile(serializedData);
+                    sharedPrefs.edit().putString("save", serializedData).apply();
 
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -89,28 +90,18 @@ public class MainActivity extends FragmentActivity implements IAddEditDialogList
 
     private void loadEditedData(String data, int index) {
         try {
+            Log.d("HEART", "Adding " + data);
+            if (dataEntries.size() > index)
+                dataEntries.remove(index);
             DataEntry entry = new DataEntry(new JSONObject(data));
-            
+            dataEntries.add(index, entry);
+
+            String serializedData = serializeData();
+            if (serializedData != null)
+                sharedPrefs.edit().putString("save", serializedData).apply();
         } catch (JSONException e) {
             e.printStackTrace();
         }
-    }
-
-
-    /**
-     * Opens a FileOutputStream and stores the list of values to the file
-     *
-     * @param toOutput - The serialized data to be saved
-     */
-    private void outputToFile(String toOutput) {
-        if (toOutput != null) {
-            try (FileOutputStream fos = getApplicationContext().openFileOutput(SAVE_FILE_NAME, Context.MODE_PRIVATE)) {
-                fos.write(toOutput.getBytes());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
     }
 
     private String serializeData() throws JSONException {
@@ -119,16 +110,7 @@ public class MainActivity extends FragmentActivity implements IAddEditDialogList
         JSONArray arr = new JSONArray();
         for (int i = 0; i < dataEntries.size(); i++) {
             DataEntry d = dataEntries.get(i);
-            JSONObject o = new JSONObject();
-            o.put("year", d.getDate().year);
-            o.put("month", d.getDate().month);
-            o.put("day", d.getDate().day);
-            o.put("hour", d.getDate().hour);
-            o.put("minute", d.getDate().minute);
-            o.put("systolic", d.getSystolic());
-            o.put("diastolic", d.getDiastolic());
-            o.put("heartRate", d.getHeartRate());
-            o.put("comment", d.getComment());
+            JSONObject o = d.toJSON();
             arr.put(i, o);
         }
         obj.put("entries", arr);
@@ -140,35 +122,20 @@ public class MainActivity extends FragmentActivity implements IAddEditDialogList
         dataEntries = new ArrayList<>();
 
         try {
-            FileInputStream fis = getApplicationContext().openFileInput(SAVE_FILE_NAME);
-            InputStreamReader isReader = new InputStreamReader(fis, StandardCharsets.UTF_8);
-            StringBuilder sb = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(isReader)) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line).append('\n');
-                }
+            String saveInfo = sharedPrefs.getString("save", null);
+            if (saveInfo == null)
+                throw new JSONException("No save file exists");
+
+            JSONObject obj = new JSONObject(saveInfo);
+            JSONArray arr = obj.getJSONArray("entries");
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                DataEntry d = new DataEntry(o);
+
+                dataEntries.add(d);
             }
 
-            JSONObject saveData = new JSONObject(sb.toString());
-            JSONArray array = saveData.getJSONArray("entries");
-            for (int i = 0; i < array.length(); i++) {
-                JSONObject entry = array.getJSONObject(i);
-                DateTime dt = new DateTime();
-                dt.year = entry.getInt("year");
-                dt.month = entry.getInt("month");
-                dt.day = entry.getInt("day");
-                dt.hour = entry.getInt("hour");
-                dt.minute = entry.getInt("minute");
-
-                int systolic = entry.getInt("systolic");
-                int diastolic = entry.getInt("diastolic");
-                int heartRate = entry.getInt("heartRate");
-                String comment = entry.getString("comment");
-                DataEntry dataEntry = new DataEntry(dt, systolic, diastolic, heartRate, comment);
-                dataEntries.add(dataEntry);
-            }
-        } catch (IOException | JSONException e) {
+        } catch (JSONException e) {
             e.printStackTrace();
         }
 
@@ -178,13 +145,25 @@ public class MainActivity extends FragmentActivity implements IAddEditDialogList
         listView.setAdapter(dataEntryAdapter);
     }
 
-    @Override
-    public void onDialogPositiveClick(DialogFragment dialog) {
+    public void onAddPressed(View view) {
+        Intent intent = new Intent(this, EditActivity.class);
+        Calendar cal = Calendar.getInstance();
+        DateTime dt = new DateTime();
+        dt.year = cal.get(Calendar.YEAR);
+        dt.month = cal.get(Calendar.MONTH) + 1;
+        dt.day = cal.get(Calendar.DAY_OF_MONTH);
+        dt.hour = cal.get(Calendar.HOUR_OF_DAY);
+        dt.minute = cal.get(Calendar.MINUTE);
 
-    }
+        DataEntry de = new DataEntry(dt, 0, 0, 0, "");
+        try {
+            JSONObject obj = de.toJSON();
+            obj.put("index", dataEntries.size());
+            intent.putExtra("SELECTED", obj.toString());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
 
-    @Override
-    public void onDialogNegativeClick(DialogFragment dialog) {
-
+        startActivity(intent);
     }
 }
